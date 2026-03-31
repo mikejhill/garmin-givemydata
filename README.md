@@ -167,13 +167,10 @@ Every metric Garmin tracks, extracted and stored locally in 47 dedicated SQLite 
 
 ## Getting Started
 
-You need **Google Chrome** installed. That's it.
-
 ### Option A: Homebrew (macOS — recommended)
 
 ```bash
 brew install nrvim/tap/garmin-givemydata
-playwright install chromium
 garmin-givemydata
 ```
 
@@ -181,7 +178,6 @@ garmin-givemydata
 
 ```bash
 pip install garmin-givemydata
-playwright install chromium
 garmin-givemydata
 ```
 
@@ -196,11 +192,26 @@ python garmin_givemydata.py
 
 ### First run
 
-1. A Chrome window opens for Garmin login (first time only — needed for Cloudflare verification)
-2. If you have MFA, enter the code in the **terminal**
+1. The tool launches a headless browser (no window visible) and navigates to Garmin login
+2. If you have MFA enabled, you will be prompted to enter the code in the **terminal**
 3. The tool prompts for your credentials and saves them to `.env`
 4. Full history is fetched year by year — takes about **30 minutes** for 10 years of data
-5. All subsequent runs are **headless** and take **seconds** (incremental sync)
+5. All subsequent runs reuse saved session cookies (~1 year lifetime) — no login needed
+
+### Browser engines
+
+The default browser engine is **Camoufox** (anti-detect Firefox). It runs fully headless and bypasses Cloudflare bot detection without showing a browser window.
+
+If Camoufox does not work on your setup, you can fall back to Chrome:
+
+```bash
+garmin-givemydata --chrome --visible
+```
+
+| Engine | Flag | Headless | Cloudflare bypass |
+|--------|------|----------|-------------------|
+| **Camoufox** (default) | none | Yes | Yes |
+| **Chrome** | `--chrome --visible` | Needs `--visible` for first login | Only with visible window |
 
 ### Where data is stored
 
@@ -213,7 +224,7 @@ python garmin_givemydata.py
 Inside the data directory:
 ```
 garmin.db              # SQLite database (all health + activity data)
-browser_profile/       # Chrome session (persists ~1 year)
+browser_profile/       # Browser session (persists ~1 year)
 .env                   # Garmin credentials (email + password)
 fit/                   # Original FIT files (lossless activity data)
 ```
@@ -241,7 +252,7 @@ cd garmin-givemydata
 python3.12 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python -m playwright install chromium
+python -m playwright install chromium   # only needed for --chrome fallback
 cp .env.example .env           # edit .env with your credentials
 ```
 </details>
@@ -255,7 +266,7 @@ cd garmin-givemydata
 python3.12 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python -m playwright install chromium
+python -m playwright install chromium   # only needed for --chrome fallback
 sudo python -m playwright install-deps chromium   # system libraries
 cp .env.example .env           # edit .env with your credentials
 ```
@@ -270,7 +281,7 @@ cd garmin-givemydata
 python3.12 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python -m playwright install chromium
+python -m playwright install chromium   # only needed for --chrome fallback
 sudo python -m playwright install-deps chromium
 cp .env.example .env           # edit .env with your credentials
 ```
@@ -286,7 +297,7 @@ cd garmin-givemydata
 python -m venv venv
 venv\Scripts\Activate.ps1      # or venv\Scripts\activate.bat for CMD
 pip install -r requirements.txt
-python -m playwright install chromium
+python -m playwright install chromium   # only needed for --chrome fallback
 copy .env.example .env         # edit .env with your credentials
 ```
 
@@ -501,7 +512,7 @@ garmin-givemydata/
 ├── run_mcp.py                  # MCP server entry point
 ├── garmin.db                   # Your health data (SQLite, gitignored, stored in data dir)
 ├── fit/                        # Your activity files (FIT/ZIP, gitignored)
-├── browser_profile/            # Chrome session (gitignored, stored in data dir)
+├── browser_profile/            # Browser session (gitignored, stored in data dir)
 └── pyproject.toml
 ```
 
@@ -522,31 +533,30 @@ SQLite ──→ MCP server (AI queries)
 | **macOS** | Tested | Primary development platform |
 | **Linux (Ubuntu/Debian/Fedora)** | Supported | May need `playwright install-deps` for system libraries |
 | **Windows 10/11** | Supported | Use PowerShell or Command Prompt |
-| **WSL2** | Supported | Needs Chrome installed in WSL or `DISPLAY` set for X11 forwarding |
+| **WSL2** | Supported | Works headless with Camoufox. Chrome fallback needs `DISPLAY` set for X11 forwarding |
 
 ## Known Limitations
 
-- **MFA on first login**: You can enter the MFA code in the **terminal** or in the **browser window** — either works. After that, the session persists ~1 year.
-- **Google Chrome required**: Must be installed on your system. Other Chromium-based browsers are not supported.
-- **Don't close the Chrome window**: The script uses the browser to fetch data. Closing it will crash the script. It closes automatically when done.
+- **MFA on first login**: If MFA is enabled, you will be prompted to enter the code in the **terminal**. After that, the session persists ~1 year.
+- **Browser memory**: Camoufox uses roughly 200-300 MB RAM while running. It closes automatically when the sync is done.
 - **Garmin can change things**: If Garmin updates their bot detection or API endpoints, this tool may need updates. Open an issue if it breaks.
 - **First fetch is slow**: 10 years of daily data takes ~30 minutes. After that, daily syncs take seconds.
-- **Linux display**: On headless Linux servers, you need a virtual display (Xvfb) or X11 forwarding for the browser window.
+- **Chrome fallback**: If Camoufox does not work on your system, use `--chrome --visible` to fall back to Chrome. Chrome headless gets blocked by Cloudflare, so `--visible` is required for the first login.
 - **Garmin ToS**: This accesses Garmin's web interface the same way you do. We believe data portability is a right.
 
 ## Troubleshooting
 
 **"Login failed"**: Delete the browser profile and run again for a fresh session. For pip/brew: `rm -rf ~/.garmin-givemydata/browser_profile`. For git clone: `rm -rf browser_profile/`.
 
-**Script crashed / "Execution context was destroyed"**: You probably closed the Chrome window. Don't close it — the script needs the browser open to fetch data. Run again.
+**Script crashed / "Execution context was destroyed"**: If using `--chrome --visible`, don't close the Chrome window. The script needs the browser open to fetch data. Run again.
 
 **"Python not found" or wrong version**: Make sure Python 3.10+ is installed and on your PATH. On macOS use `brew install python@3.12`, on Ubuntu `sudo apt install python3.12 python3.12-venv`.
 
 **403 or session errors**: Session may have expired. Delete the browser profile (see "Reset / clean start" above) and re-login.
 
-**Browser doesn't open (Linux)**: You need a display. Either use a desktop environment, or install Xvfb: `sudo apt install xvfb && xvfb-run python garmin_givemydata.py`
+**Chrome doesn't open (Linux)**: If using `--chrome --visible`, you need a display. Either use a desktop environment, or install Xvfb: `sudo apt install xvfb && xvfb-run python garmin_givemydata.py`. With the default Camoufox engine, no display is needed.
 
-**Playwright install fails (Linux)**: Run `sudo python -m playwright install-deps chromium` to install system dependencies (libnss3, libatk, etc.).
+**Playwright install fails (Linux)**: Run `sudo python -m playwright install-deps` to install system dependencies (libnss3, libatk, etc.).
 
 **MCP server "failed to connect"**:
 - Paths in `.mcp.json` must be **absolute** (not relative)
@@ -567,8 +577,7 @@ This project exists because Garmin refuses to give users access to their own dat
 - **New endpoints**: Garmin has hundreds of internal APIs. If you discover new ones via browser dev tools, add them to `endpoints.py`.
 - **More MCP tools**: Build specialized analysis tools — training load analysis, injury risk prediction, sleep optimization, race readiness scoring, overtraining detection.
 - **MCP client integrations**: Test and document setup with more MCP clients — OpenClaw, Cline, Continue, Cursor, or your own tools.
-- **Headless mode**: Figure out how to run fully headless after the initial session is established.
-- **Other browsers**: Test with Firefox/Edge using Playwright's other browser channels.
+- **Other platforms**: Test on ARM (Raspberry Pi), Docker containers, and other environments.
 - **Data visualization**: Build dashboards, charts, or reports from the SQLite data.
 - **Export formats**: Add CSV, Parquet, or other export formats for use with pandas, R, or other analysis tools.
 - **Other wearables**: The architecture (browser auth + SQLite + MCP) could work for COROS, Samsung, Amazfit/Zepp, and others that restrict API access. Fork this and adapt it. (Note: Oura, WHOOP, Polar, Fitbit, Wahoo, and Apple HealthKit already offer open APIs — use those directly instead of scraping.)
