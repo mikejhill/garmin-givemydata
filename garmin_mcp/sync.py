@@ -35,7 +35,7 @@ def incremental_sync(target_date: str = None) -> dict:
     yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
 
     PROJECT_DIR = Path(__file__).parent.parent
-    PROFILE_DIR = PROJECT_DIR / "browser_profile_stealth"
+    PROFILE_DIR = PROJECT_DIR / "browser_profile"
 
     # Load .env if present
     import os
@@ -67,10 +67,13 @@ def incremental_sync(target_date: str = None) -> dict:
         if n > 0:
             counts[endpoint_name] = counts.get(endpoint_name, 0) + n
 
+    SESSION_FILE = PROJECT_DIR / "garmin_session.json"
     client = GarminClient(
         email=email,
         password=password,
         profile_dir=PROFILE_DIR,
+        engine="auto",
+        session_file=SESSION_FILE,
     )
 
     logger.info("Starting incremental sync for %s (+ %s)", today, yesterday)
