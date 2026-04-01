@@ -4,13 +4,12 @@ Garmin MCP server — exposes health and activity data via FastMCP tools.
 
 import json
 import logging
-import math
 import threading
 from datetime import date, timedelta
 
 from mcp.server.fastmcp import FastMCP
 
-from .db import DB_PATH, get_connection, init_db, query, query_readonly
+from .db import get_connection, init_db, query, query_readonly
 
 log = logging.getLogger(__name__)
 
@@ -426,6 +425,7 @@ def _run_incremental_sync() -> dict:
 
     def _go():
         from .sync import incremental_sync
+
         return incremental_sync()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
@@ -823,12 +823,14 @@ def garmin_training_load() -> str:
             # Only emit weekly points + last 14 days for conciseness
             remaining = days_range - i
             if remaining <= 14 or i % 7 == 0:
-                timeline.append({
-                    "date": d,
-                    "ctl": round(ctl, 1),
-                    "atl": round(atl, 1),
-                    "tsb": round(ctl - atl, 1),
-                })
+                timeline.append(
+                    {
+                        "date": d,
+                        "ctl": round(ctl, 1),
+                        "atl": round(atl, 1),
+                        "tsb": round(ctl - atl, 1),
+                    }
+                )
 
         # Weekly volume (last 12 weeks)
         twelve_weeks_ago = str(today - timedelta(weeks=12))
@@ -868,9 +870,12 @@ def garmin_training_load() -> str:
                 "atl_fatigue": current.get("atl"),
                 "tsb_form": current.get("tsb"),
                 "interpretation": (
-                    "FRESH — ready to race/test" if current.get("tsb", 0) > 15
-                    else "OPTIMAL — good training balance" if current.get("tsb", 0) > 0
-                    else "FATIGUED — absorbing training load" if current.get("tsb", 0) > -15
+                    "FRESH — ready to race/test"
+                    if current.get("tsb", 0) > 15
+                    else "OPTIMAL — good training balance"
+                    if current.get("tsb", 0) > 0
+                    else "FATIGUED — absorbing training load"
+                    if current.get("tsb", 0) > -15
                     else "OVERREACHING — need recovery"
                 ),
             },
@@ -902,6 +907,7 @@ def garmin_compare(
     """
     conn = get_connection()
     try:
+
         def _fetch_period(start: str, end: str) -> dict:
             daily = query(
                 conn,
@@ -1049,10 +1055,7 @@ def garmin_fitness_age(period: str = "month") -> str:
     if period not in ("week", "month"):
         return json.dumps({"error": "period must be 'week' or 'month'."})
 
-    group_expr = (
-        "strftime('%Y-W%W', calendar_date)" if period == "week"
-        else "strftime('%Y-%m', calendar_date)"
-    )
+    group_expr = "strftime('%Y-W%W', calendar_date)" if period == "week" else "strftime('%Y-%m', calendar_date)"
 
     conn = get_connection()
     try:
@@ -1150,8 +1153,12 @@ def garmin_hrv(days: int = 30) -> str:
                 "baseline_low": latest["baseline_low"],
                 "baseline_upper": latest["baseline_upper"],
                 "position": (
-                    "ABOVE baseline" if latest["weekly_avg"] and latest["baseline_upper"] and latest["weekly_avg"] > latest["baseline_upper"]
-                    else "BELOW baseline" if latest["weekly_avg"] and latest["baseline_low"] and latest["weekly_avg"] < latest["baseline_low"]
+                    "ABOVE baseline"
+                    if latest["weekly_avg"]
+                    and latest["baseline_upper"]
+                    and latest["weekly_avg"] > latest["baseline_upper"]
+                    else "BELOW baseline"
+                    if latest["weekly_avg"] and latest["baseline_low"] and latest["weekly_avg"] < latest["baseline_low"]
                     else "WITHIN baseline"
                 ),
             },
@@ -1200,9 +1207,9 @@ def garmin_body_battery(days: int = 14) -> str:
 
         # Flag critical days (wake < 40 or low < 15)
         critical_days = [
-            r["calendar_date"] for r in rows
-            if (r["at_wake"] is not None and r["at_wake"] < 40)
-            or (r["low"] is not None and r["low"] < 15)
+            r["calendar_date"]
+            for r in rows
+            if (r["at_wake"] is not None and r["at_wake"] < 40) or (r["low"] is not None and r["low"] < 15)
         ]
 
         # Average wake value
@@ -1306,14 +1313,16 @@ def garmin_heart_rate(days: int = 30) -> str:
             avg_7d = round(sum(window) / len(window), 1) if window else None
             rhr = r["rhr"]
             elevated = rhr and avg_7d and (rhr - avg_7d > 5)
-            output.append({
-                "date": r["calendar_date"],
-                "rhr": rhr,
-                "min_hr": r["min_hr"],
-                "max_hr": r["max_hr"],
-                "avg_7d": avg_7d,
-                "elevated": elevated,
-            })
+            output.append(
+                {
+                    "date": r["calendar_date"],
+                    "rhr": rhr,
+                    "min_hr": r["min_hr"],
+                    "max_hr": r["max_hr"],
+                    "avg_7d": avg_7d,
+                    "elevated": elevated,
+                }
+            )
 
         # Trim to requested days
         cutoff = str(date.today() - timedelta(days=days - 1))
@@ -1578,16 +1587,18 @@ def garmin_recovery(days_after: int = 3) -> str:
             else:
                 rhr_delta = None
 
-            results.append({
-                "activity": a["activity_name"],
-                "type": a["activity_type"],
-                "date": d,
-                "load": a["load"],
-                "duration_min": a["duration_min"],
-                "avg_hr": a["avg_hr"],
-                "rhr_delta_after": rhr_delta,
-                "recovery": recovery_days,
-            })
+            results.append(
+                {
+                    "activity": a["activity_name"],
+                    "type": a["activity_type"],
+                    "date": d,
+                    "load": a["load"],
+                    "duration_min": a["duration_min"],
+                    "avg_hr": a["avg_hr"],
+                    "rhr_delta_after": rhr_delta,
+                    "recovery": recovery_days,
+                }
+            )
 
         # Aggregate: avg recovery by sport type
         by_sport: dict[str, list] = {}
@@ -1603,13 +1614,18 @@ def garmin_recovery(days_after: int = 3) -> str:
                 "avg_rhr_impact": round(sum(deltas) / len(deltas), 1),
                 "sessions": len(deltas),
             }
-            for sport, deltas in by_sport.items() if deltas
+            for sport, deltas in by_sport.items()
+            if deltas
         }
 
-        return json.dumps({
-            "recovery_by_sport": sport_summary,
-            "sessions": results,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "recovery_by_sport": sport_summary,
+                "sessions": results,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -1656,12 +1672,16 @@ def garmin_training_status(days: int = 90) -> str:
 
         current = rows[-1]["status"] if rows else None
 
-        return json.dumps({
-            "current_status": current,
-            "days_in_status": counts,
-            "transitions": transitions[-10:],
-            "daily": rows,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "current_status": current,
+                "days_in_status": counts,
+                "transitions": transitions[-10:],
+                "daily": rows,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -1700,11 +1720,15 @@ def garmin_workouts() -> str:
             """SELECT id, raw_json FROM training_plans""",
         )
 
-        return json.dumps({
-            "workout_library": workouts,
-            "scheduled": schedule,
-            "training_plans": plans,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "workout_library": workouts,
+                "scheduled": schedule,
+                "training_plans": plans,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -1738,11 +1762,15 @@ def garmin_badges() -> str:
                 by_category[cat] = []
             by_category[cat].append(r)
 
-        return json.dumps({
-            "total_badges": len(rows),
-            "badges": rows,
-            "by_category": {k: len(v) for k, v in by_category.items()},
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "total_badges": len(rows),
+                "badges": rows,
+                "by_category": {k: len(v) for k, v in by_category.items()},
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -1778,12 +1806,16 @@ def garmin_hydration(days: int = 30) -> str:
 
         tracked = [r for r in rows if r["intake_ml"] and r["intake_ml"] > 0]
 
-        return json.dumps({
-            "days_tracked": len(tracked),
-            "days_total": len(rows),
-            "data": rows if tracked else [],
-            "note": "No hydration data logged" if not tracked else None,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "days_tracked": len(tracked),
+                "days_total": len(rows),
+                "data": rows if tracked else [],
+                "note": "No hydration data logged" if not tracked else None,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -1818,13 +1850,17 @@ def garmin_respiration(days: int = 14) -> str:
         avgs = [r["avg_waking"] for r in rows if r["avg_waking"]]
         elevated = [r["calendar_date"] for r in rows if r["avg_waking"] and r["avg_waking"] > 20]
 
-        return json.dumps({
-            "summary": {
-                "period_avg": round(sum(avgs) / len(avgs), 1) if avgs else None,
-                "elevated_days": elevated,
+        return json.dumps(
+            {
+                "summary": {
+                    "period_avg": round(sum(avgs) / len(avgs), 1) if avgs else None,
+                    "elevated_days": elevated,
+                },
+                "daily": rows,
             },
-            "daily": rows,
-        }, indent=2, default=str)
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -1859,10 +1895,14 @@ def garmin_intensity_minutes(days: int = 30) -> str:
             [start],
         )
 
-        return json.dumps({
-            "who_target": "150 min/week (moderate) or 75 min/week (vigorous)",
-            "weekly": rows,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "who_target": "150 min/week (moderate) or 75 min/week (vigorous)",
+                "weekly": rows,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -1896,14 +1936,18 @@ def garmin_floors(days: int = 14) -> str:
         ups = [r["floors_up"] for r in rows if r["floors_up"]]
         goal_met = sum(1 for r in rows if r["pct_of_goal"] and r["pct_of_goal"] >= 100)
 
-        return json.dumps({
-            "summary": {
-                "avg_floors_day": round(sum(ups) / len(ups), 1) if ups else None,
-                "days_goal_met": goal_met,
-                "days_total": len(rows),
+        return json.dumps(
+            {
+                "summary": {
+                    "avg_floors_day": round(sum(ups) / len(ups), 1) if ups else None,
+                    "days_goal_met": goal_met,
+                    "days_total": len(rows),
+                },
+                "daily": rows,
             },
-            "daily": rows,
-        }, indent=2, default=str)
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -1951,16 +1995,20 @@ def garmin_steps(days: int = 14) -> str:
             else:
                 streak = 0
 
-        return json.dumps({
-            "summary": {
-                "avg_steps": round(sum(steps_list) / len(steps_list), 0) if steps_list else None,
-                "days_goal_met": goal_met_days,
-                "days_total": len(rows),
-                "longest_goal_streak": max_streak,
-                "best_day": max(rows, key=lambda r: r["steps"] or 0)["calendar_date"] if rows else None,
+        return json.dumps(
+            {
+                "summary": {
+                    "avg_steps": round(sum(steps_list) / len(steps_list), 0) if steps_list else None,
+                    "days_goal_met": goal_met_days,
+                    "days_total": len(rows),
+                    "longest_goal_streak": max_streak,
+                    "best_day": max(rows, key=lambda r: r["steps"] or 0)["calendar_date"] if rows else None,
+                },
+                "daily": rows,
             },
-            "daily": rows,
-        }, indent=2, default=str)
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2006,14 +2054,18 @@ def garmin_calories(days: int = 14) -> str:
         totals = [r["total_cal"] for r in rows if r["total_cal"]]
         actives = [r["active_cal"] for r in rows if r["active_cal"]]
 
-        return json.dumps({
-            "summary": {
-                "avg_total_cal": round(sum(totals) / len(totals), 0) if totals else None,
-                "avg_active_cal": round(sum(actives) / len(actives), 0) if actives else None,
+        return json.dumps(
+            {
+                "summary": {
+                    "avg_total_cal": round(sum(totals) / len(totals), 0) if totals else None,
+                    "avg_active_cal": round(sum(actives) / len(actives), 0) if actives else None,
+                },
+                "daily": rows,
+                "food_log": consumed if consumed else [],
             },
-            "daily": rows,
-            "food_log": consumed if consumed else [],
-        }, indent=2, default=str)
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2043,17 +2095,19 @@ def garmin_blood_pressure(days: int = 90) -> str:
         )
 
         flagged = [
-            r for r in rows
-            if (r["systolic"] and r["systolic"] >= 140)
-            or (r["diastolic"] and r["diastolic"] >= 90)
+            r for r in rows if (r["systolic"] and r["systolic"] >= 140) or (r["diastolic"] and r["diastolic"] >= 90)
         ]
 
-        return json.dumps({
-            "total_readings": len(rows),
-            "elevated_readings": len(flagged),
-            "data": rows,
-            "note": "No blood pressure data recorded" if not rows else None,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "total_readings": len(rows),
+                "elevated_readings": len(flagged),
+                "data": rows,
+                "note": "No blood pressure data recorded" if not rows else None,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2073,11 +2127,15 @@ def garmin_goals() -> str:
             """SELECT goal_id, goal_type, goal_value, raw_json
                FROM goals""",
         )
-        return json.dumps({
-            "total_goals": len(rows),
-            "goals": rows,
-            "note": "No goals set" if not rows else None,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "total_goals": len(rows),
+                "goals": rows,
+                "note": "No goals set" if not rows else None,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2097,11 +2155,15 @@ def garmin_challenges() -> str:
             """SELECT id, challenge_type, raw_json
                FROM challenges""",
         )
-        return json.dumps({
-            "total_challenges": len(rows),
-            "challenges": rows,
-            "note": "No challenges found" if not rows else None,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "total_challenges": len(rows),
+                "challenges": rows,
+                "note": "No challenges found" if not rows else None,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2178,17 +2240,21 @@ def garmin_race_predictions(days: int = 30) -> str:
 
         latest = rows[-1] if rows else {}
 
-        return json.dumps({
-            "latest": {
-                "date": latest.get("calendar_date"),
-                "5k": latest.get("time_5k_fmt"),
-                "10k": latest.get("time_10k_fmt"),
-                "half_marathon": latest.get("time_half_fmt"),
-                "marathon": latest.get("time_marathon_fmt"),
+        return json.dumps(
+            {
+                "latest": {
+                    "date": latest.get("calendar_date"),
+                    "5k": latest.get("time_5k_fmt"),
+                    "10k": latest.get("time_10k_fmt"),
+                    "half_marathon": latest.get("time_half_fmt"),
+                    "marathon": latest.get("time_marathon_fmt"),
+                },
+                "trend": {"direction": trend, "5k_delta_sec": round(delta)},
+                "daily": rows,
             },
-            "trend": {"direction": trend, "5k_delta_sec": round(delta)},
-            "daily": rows,
-        }, indent=2, default=str)
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2216,15 +2282,21 @@ def garmin_endurance_score(days: int = 30) -> str:
 
         scores = [r["overall_score"] for r in rows if r["overall_score"]]
         if len(scores) >= 2:
-            trend = "improving" if scores[-1] > scores[0] + 10 else "declining" if scores[-1] < scores[0] - 10 else "stable"
+            trend = (
+                "improving" if scores[-1] > scores[0] + 10 else "declining" if scores[-1] < scores[0] - 10 else "stable"
+            )
         else:
             trend = "insufficient data"
 
-        return json.dumps({
-            "latest": rows[-1] if rows else {},
-            "trend": trend,
-            "daily": rows,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "latest": rows[-1] if rows else {},
+                "trend": trend,
+                "daily": rows,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2249,10 +2321,14 @@ def garmin_hill_score(days: int = 30) -> str:
                ORDER BY calendar_date""",
             [start],
         )
-        return json.dumps({
-            "latest": rows[-1] if rows else {},
-            "daily": rows,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "latest": rows[-1] if rows else {},
+                "daily": rows,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2290,11 +2366,15 @@ def garmin_vo2max() -> str:
                ORDER BY start_time_local DESC""",
         )
 
-        return json.dumps({
-            "from_vo2max_table": vo2_table,
-            "from_activities": vo2_activities,
-            "note": "No VO2max data" if not vo2_table and not vo2_activities else None,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "from_vo2max_table": vo2_table,
+                "from_activities": vo2_activities,
+                "note": "No VO2max data" if not vo2_table and not vo2_activities else None,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2330,11 +2410,15 @@ def garmin_health_snapshot() -> str:
                     entry["data"] = r["raw_json"]
             parsed.append(entry)
 
-        return json.dumps({
-            "total_snapshots": len(parsed),
-            "snapshots": parsed,
-            "note": "No health snapshots taken" if not parsed else None,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "total_snapshots": len(parsed),
+                "snapshots": parsed,
+                "note": "No health snapshots taken" if not parsed else None,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
@@ -2355,11 +2439,15 @@ def garmin_gear() -> str:
                       brand, model, date_begin
                FROM gear""",
         )
-        return json.dumps({
-            "total_gear": len(rows),
-            "gear": rows,
-            "note": "No gear tracked" if not rows else None,
-        }, indent=2, default=str)
+        return json.dumps(
+            {
+                "total_gear": len(rows),
+                "gear": rows,
+                "note": "No gear tracked" if not rows else None,
+            },
+            indent=2,
+            default=str,
+        )
     finally:
         conn.close()
 
