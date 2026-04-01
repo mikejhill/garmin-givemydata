@@ -17,3 +17,4 @@ dist/
 *.db-shm
 *.db-wal
 garmin_session.json
+.mcp.json
