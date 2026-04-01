@@ -10,6 +10,8 @@
 
 **It's YOUR data. Take it back.**
 
+One command. All your Garmin data. Local SQLite + FIT files. Export to CSV, JSON, GPX, TCX. AI-ready via MCP.
+
 Garmin makes it nearly impossible for individuals to access their own health data programmatically. There is no public API. The official "developer program" is restricted to approved businesses only. And in March 2026, Garmin deployed aggressive Cloudflare protections that broke **every single community library** — [garth](https://github.com/matin/garth) (deprecated), [python-garminconnect](https://github.com/cyberjunky/python-garminconnect) (broken auth), and all downstream tools like Home Assistant integrations.
 
 You paid for the hardware. You generated the data with your body. You should be able to access it.
