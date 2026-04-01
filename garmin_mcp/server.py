@@ -65,7 +65,8 @@ def garmin_query(sql: str, limit: int = 1000) -> str:
     the SQL content.  Results are capped at *limit* rows (default 1000).
     """
     try:
-        rows = query_readonly(sql, limit=limit)
+        clamped = max(1, min(limit, 10000))
+        rows = query_readonly(sql, limit=clamped)
         return json.dumps(rows, indent=2, default=str)
     except Exception as exc:
         log.exception("garmin_query failed")
@@ -428,9 +429,15 @@ def _run_incremental_sync() -> dict:
 
         return incremental_sync()
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_go)
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = pool.submit(_go)
+    try:
         return future.result(timeout=300)
+    except concurrent.futures.TimeoutError:
+        pool.shutdown(wait=False, cancel_futures=True)
+        raise
+    finally:
+        pool.shutdown(wait=False)
 
 
 def _get_data_freshness() -> dict:

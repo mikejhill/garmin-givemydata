@@ -1938,9 +1938,10 @@ def query_readonly(sql: str, params: Any = None, limit: int = 1000) -> list[dict
     ro_conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
     ro_conn.row_factory = sqlite3.Row
     try:
+        clamped = max(1, min(limit if isinstance(limit, int) else 1000, 10000))
         ro_conn.execute("PRAGMA busy_timeout = 5000")
         cursor = ro_conn.execute(sql, params or [])
-        rows = [dict(row) for row in cursor.fetchmany(limit)]
+        rows = [dict(row) for row in cursor.fetchmany(clamped)]
         return rows
     finally:
         ro_conn.close()
