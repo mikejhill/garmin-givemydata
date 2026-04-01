@@ -23,7 +23,8 @@ def incremental_sync(target_date: str = None, save_raw: bool = False) -> dict:
         ISO date string (``YYYY-MM-DD``) to treat as "today".  Defaults to
         the actual current date.
     save_raw:
-        Whether to save raw JSON responses to the 'raw' directory.
+        Whether to save raw JSON responses under the ``debug/raw`` directory
+        in the data directory (next to ``browser_profile``).
 
     Returns
     -------

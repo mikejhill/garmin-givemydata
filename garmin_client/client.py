@@ -667,7 +667,8 @@ class GarminClient:
             Activity IDs that already have detail data (splits, HR zones, weather).
             These will be skipped during per-activity detail fetching.
         save_raw : bool, default False
-            Whether to save raw JSON responses to the 'raw' directory.
+            Whether to save raw JSON responses under the ``debug/raw`` directory
+            in the data directory (next to ``browser_profile``).
         """
         self._save_raw_enabled = save_raw
         today = target_date or date.today().isoformat()
