@@ -1091,14 +1091,23 @@ def upsert_fitness_age(conn: sqlite3.Connection, record: dict, cal_date: str = N
 
 
 def upsert_weight(conn: sqlite3.Connection, record: dict, cal_date: str = None) -> None:
-    d = cal_date or record.get("calendarDate") or record.get("date")
+    from datetime import datetime
+
+    d = cal_date or record.get("calendarDate")
+
+    # The "date" field from weight endpoints is a Unix timestamp in
+    # milliseconds (e.g. 1743345400000), not a calendar date string.
+    # Convert it properly instead of storing the raw integer.
     if not d:
-        # weight_latest has a timestamp, not a date
         ts = record.get("date")
         if isinstance(ts, (int, float)):
-            from datetime import datetime
+            # Garmin uses milliseconds; values > 1e10 are ms timestamps
+            if ts > 1e10:
+                ts = ts / 1000
+            d = datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+        elif isinstance(ts, str) and ts[:4].isdigit() and "-" in ts:
+            d = ts[:10]
 
-            d = datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d")
     if not d:
         return
     d = str(d)[:10]
@@ -1910,3 +1919,28 @@ def query(conn: sqlite3.Connection, sql: str, params: Any = None) -> list[dict]:
     """Execute *sql* with optional *params* and return results as a list of dicts."""
     cursor = conn.execute(sql, params or [])
     return [dict(row) for row in cursor.fetchall()]
+
+
+def query_readonly(sql: str, params: Any = None, limit: int = 1000) -> list[dict]:
+    """Execute a read-only query against the database.
+
+    Opens the database in SQLite read-only mode (``?mode=ro`` URI),
+    which enforces read-only at the engine level — no writes, no
+    PRAGMA changes, regardless of the SQL content.  Additionally
+    blocks ATTACH/DETACH to prevent filesystem side-effects.
+    """
+    # Block ATTACH/DETACH before opening any connection — these can
+    # create zero-byte files on disk even in read-only mode.
+    check = sql.strip().upper()
+    if "ATTACH" in check or "DETACH" in check:
+        raise PermissionError("ATTACH and DETACH are not permitted.")
+
+    ro_conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    ro_conn.row_factory = sqlite3.Row
+    try:
+        ro_conn.execute("PRAGMA busy_timeout = 5000")
+        cursor = ro_conn.execute(sql, params or [])
+        rows = [dict(row) for row in cursor.fetchmany(limit)]
+        return rows
+    finally:
+        ro_conn.close()
