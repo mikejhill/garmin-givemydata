@@ -278,6 +278,11 @@ examples:
     parser.add_argument("--json-import", type=str, help="Import existing JSON file to DB")
     parser.add_argument("--status", action="store_true", help="Show database status and exit")
     parser.add_argument(
+        "--export-token",
+        action="store_true",
+        help="Export browser session as a token for python-garminconnect / Home Assistant",
+    )
+    parser.add_argument(
         "--visible",
         action="store_true",
         help="Show the browser window (default: headless). Useful for debugging login issues.",
@@ -316,6 +321,36 @@ examples:
                 except Exception:
                     pass
             conn.close()
+        return
+
+    # ── Export token ──────────────────────────────────────
+    if args.export_token:
+        import json as _json
+
+        if not SESSION_FILE.exists():
+            print("No session file found. Run a sync first to authenticate with Garmin.")
+            sys.exit(1)
+
+        session_data = _json.loads(SESSION_FILE.read_text())
+        cookies = session_data.get("cookies", [])
+        jwt_web = None
+        for cookie in cookies:
+            if cookie.get("name") == "JWT_WEB":
+                jwt_web = cookie["value"]
+                break
+
+        if not jwt_web:
+            print("No JWT_WEB token found in session. Run a sync to re-authenticate.")
+            sys.exit(1)
+
+        token = _json.dumps({
+            "di_token": None,
+            "di_refresh_token": None,
+            "di_client_id": None,
+            "jwt_web": jwt_web,
+            "csrf_token": None,
+        })
+        print(token)
         return
 
     # ── JSON import ───────────────────────────────────────
