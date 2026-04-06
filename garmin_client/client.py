@@ -101,6 +101,7 @@ class GarminClient:
         profile_dir: Optional[Path] = None,
         headless: bool = False,
         session_file: Optional[Path] = None,
+        install_signal_handlers: bool = True,
         **_kwargs,  # absorb legacy engine= kwarg
     ):
         self.email = email
@@ -109,6 +110,7 @@ class GarminClient:
         self.profile_dir.mkdir(parents=True, exist_ok=True)
         self.headless = headless
         self.session_file = session_file
+        self._install_signal_handlers = install_signal_handlers
         self._driver = None
         self._csrf: Optional[str] = None
         self._csrf_time: float = 0
@@ -324,7 +326,8 @@ class GarminClient:
         self._load_legacy_session()
 
         self._lifecycle = _ProcessLifecycle(self.close)
-        self._lifecycle.install()
+        if self._install_signal_handlers:
+            self._lifecycle.install()
 
         log.info("Browser engine: SeleniumBase UC (Chrome)")
 
@@ -350,7 +353,7 @@ class GarminClient:
 
     # ── Login flow ───────────────────────────────────────────────
 
-    def login(self, timeout_ms: int = 600000) -> bool:
+    def login(self, timeout_ms: int = 600000, return_on_mfa: bool = False) -> "bool | str":
         self._launch_browser()
 
         log.debug("Navigating to connect.garmin.com/modern/")
@@ -510,6 +513,10 @@ class GarminClient:
                 except Exception:
                     pass
 
+                if return_on_mfa:
+                    log.info("MFA required — returning for external MFA input")
+                    return "needs_mfa"
+
                 if sys.stdin.isatty():
                     import threading
 
@@ -599,6 +606,83 @@ class GarminClient:
                 continue
 
         log.warning("Could not find MFA input field to fill")
+
+    def submit_mfa(self, code: str, timeout_ms: int = 300000) -> bool:
+        """Submit an MFA code and wait for login to complete.
+
+        Use after ``login()`` returned ``"needs_mfa"`` with ``return_on_mfa=True``.
+        The browser must still be alive on the MFA page.
+        """
+        self._submit_mfa_code(code)
+
+        max_polls = timeout_ms // 1000
+        for poll in range(max_polls):
+            time.sleep(1)
+            try:
+                url = self._driver.current_url
+            except Exception:
+                continue
+
+            if poll % 5 == 0:
+                log.debug("MFA poll %d: URL = %s", poll, url)
+
+            if "connect.garmin.com" in url and "sso.garmin.com" not in url:
+                log.info("Post-MFA redirect detected: %s", url)
+                break
+
+            # Check other tabs
+            handles = self._driver.window_handles
+            if len(handles) > 1:
+                original = self._driver.current_window_handle
+                for handle in handles:
+                    self._driver.switch_to.window(handle)
+                    p_url = self._driver.current_url
+                    if "connect.garmin.com" in p_url and "sso.garmin.com" not in p_url:
+                        log.info("Found app in another tab post-MFA: %s", p_url)
+                        url = p_url
+                        break
+                else:
+                    self._driver.switch_to.window(original)
+            if "connect.garmin.com" in url and "sso.garmin.com" not in url:
+                break
+
+            if poll > 0 and poll % 30 == 0:
+                log.debug("Trying to navigate to app post-MFA...")
+                try:
+                    self._driver.get("https://connect.garmin.com/modern/")
+                    time.sleep(2)
+                    url = self._driver.current_url
+                    if "connect.garmin.com" in url and "sso.garmin.com" not in url:
+                        break
+                except Exception as e:
+                    log.debug("Nav attempt error: %s", e)
+
+        time.sleep(3)
+        if self._is_on_login_page():
+            log.error("MFA failed — still on login page: %s", self._driver.current_url)
+            return False
+
+        log.info("MFA login successful, URL: %s", self._driver.current_url)
+        self._save_session()
+        return self._post_login_setup()
+
+    def get_auth_tokens(self) -> dict:
+        """Extract JWT_WEB and CSRF tokens from the current browser session.
+
+        Returns a dict with ``jwt_web`` and optionally ``csrf_token``.
+        Call after a successful ``login()`` or ``submit_mfa()``.
+        """
+        tokens: dict = {}
+        if self._driver:
+            try:
+                for cookie in self._driver.get_cookies():
+                    if cookie.get("name") == "JWT_WEB":
+                        tokens["jwt_web"] = cookie["value"]
+            except Exception as e:
+                log.debug("Error reading browser cookies: %s", e)
+        if self._csrf:
+            tokens["csrf_token"] = self._csrf
+        return tokens
 
     def _is_on_login_page(self) -> bool:
         try:
