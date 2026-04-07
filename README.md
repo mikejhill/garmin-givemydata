@@ -1,5 +1,9 @@
 # garmin-givemydata
 
+> **⚠️ DEVELOPMENT ONLY — This fork is not intended for general use.**
+> This is an experimental fork used for development and testing of Home Assistant integration features.
+> For the upstream project, see [nrvim/garmin-givemydata](https://github.com/nrvim/garmin-givemydata).
+
 [![CI](https://github.com/nrvim/garmin-givemydata/actions/workflows/ci.yml/badge.svg)](https://github.com/nrvim/garmin-givemydata/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/garmin-givemydata.svg)](https://pypi.org/project/garmin-givemydata/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
